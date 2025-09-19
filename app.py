@@ -60,7 +60,7 @@ pozadovane_rocni_ciste = realna_porizovaci_cena * pozadovany_vynos
 pozadovane_mesicni_ciste = pozadovane_rocni_ciste / 12
 ROI_cilove = pozadovane_rocni_ciste / realna_porizovaci_cena if realna_porizovaci_cena > 0 else 0
 
-st.markdown("## 📊 Dashboard 1 – Cílové hodnoty")
+st.markdown("## 📊 Cílové hodnoty")
 c1, c2, c3 = st.columns(3)
 with c1:
     st.metric("Reálná pořizovací cena", f"{realna_porizovaci_cena:,.0f} Kč")
@@ -89,7 +89,7 @@ ROI_real = rocni_ciste_real / realna_porizovaci_cena if realna_porizovaci_cena >
 # Výpočet rozdílu potřebného nájmu
 rozdil_mesicni = pozadovane_mesicni_ciste - (mesicni_najemne_real - mesicni_naklady_real)
 
-st.markdown("## 🏡 Jak jsou reálně dosažitelné hodnoty")
+st.markdown("## 🏡 Jaké jsou reálně dosažitelné hodnoty?")
 c4, c5, c6, c7 = st.columns(4)
 with c4:
     st.metric("Čistý roční nájem (reálný)", f"{rocni_ciste_real:,.0f} Kč")
@@ -138,3 +138,4 @@ with c10:
         st.metric("Měsíční cashflow", f"+{cashflow:,.0f} Kč")
     else:
         st.metric("Měsíční cashflow", f"{cashflow:,.0f} Kč")
+
