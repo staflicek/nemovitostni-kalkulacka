@@ -1,88 +1,140 @@
-﻿import streamlit as st
-import numpy_financial as npf
+import streamlit as st
+import math
 
-st.set_page_config(page_title="Kalkulačka výnosnosti", layout="wide")
-st.title("📊 Kalkulačka výnosnosti nemovitosti")
+st.set_page_config(layout="wide")
 
-# --- Vstupy ---
-varianta = st.radio(
-    "Zvolte variantu výpočtu:",
-    ["A: Výpočet pro celý byt", "B: Výpočet pro počet pokojů"],
-    index=0
+# 🔠 Vlastní CSS styly
+st.markdown(
+    """
+    <style>
+    h1 {font-size: 36px !important;}
+    h2, h3 {font-size: 28px !important;}
+
+    /* Popisky metrik */
+    div[data-testid="stMetricLabel"] {
+        font-size: 20px !important;
+        font-weight: bold !important;
+        color: #333 !important;
+    }
+
+    /* Hodnoty metrik */
+    div[data-testid="stMetricValue"] {
+        font-size: 32px !important;
+        font-weight: bold !important;
+        color: black !important;
+    }
+
+    /* Zvýšení velikosti popisků nad vstupy */
+    div[data-testid="stWidgetLabel"] > label > div > p {
+        font-size: 24px !important;
+        font-weight: bold !important;
+        color: #000000 !important;
+    }
+
+    /* Hodnoty uvnitř vstupů */
+    input {
+        font-size: 20px !important;
+        font-weight: bold !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
-col1, col2 = st.columns(2)
+st.title("🏠 Kalkulačka výnosnosti nemovitosti")
 
-with col1:
-    pozadovany_vynos = st.slider("Požadovaný čistý výnos (%)", 1.0, 10.0, 6.0, 0.1) / 100
-    rekonstrukce = st.number_input("Náklady na rekonstrukci (Kč)", min_value=0, value=0, step=50000)
-    kupni_cena = st.number_input("Kupní cena bez rekonstrukce (Kč)", min_value=0, value=3_000_000, step=100_000)
+# ----------------------------
+# 1) Požadovaný výnos a pořizovací cena
+# ----------------------------
+st.markdown("## 📊 Za kolik koupím, za kolik rekonstruuju a jaký z toho chci mít roční výnos?")
+pozadovany_vynos = st.slider("Požadovaný čistý výnos (%)", 1.0, 15.0, 6.0) / 100
+kupni_cena_bez = st.number_input("Kupní cena bez rekonstrukce (Kč)", min_value=0, value=3_000_000, step=100_000)
+naklady_rekonstrukce = st.number_input("Náklady na rekonstrukci (Kč)", min_value=0, value=0, step=50_000)
 
-with col2:
-    realne_najemne = st.number_input("Reálné měsíční čisté nájemné (Kč)", min_value=0, value=14_000, step=500)
-    provozni_naklady = st.number_input("Provozní měsíční náklady (Kč)", min_value=0, value=3_000, step=500)
-    ltv = st.slider("LTV (%)", 0, 100, 80, 1) / 100
-    splatnost_let = st.slider("Splatnost hypotéky (roky)", 1, 40, 30, 1)
-    urok = st.number_input("Úroková sazba hypotéky (%)", min_value=0.0, value=5.0, step=0.1) / 100
+realna_porizovaci_cena = kupni_cena_bez + naklady_rekonstrukce
 
-# --- Výpočty ---
-hypo_vyse = kupni_cena * ltv
-nper = splatnost_let * 12
-mesicni_sazba = urok / 12
-splatka = npf.pmt(mesicni_sazba, nper, -hypo_vyse) if nper > 0 else 0
+# ----------------------------
+# 2) Dashboard 1 – cílové hodnoty
+# ----------------------------
+pozadovane_rocni_ciste = realna_porizovaci_cena * pozadovany_vynos
+pozadovane_mesicni_ciste = pozadovane_rocni_ciste / 12
+ROI_cilove = pozadovane_rocni_ciste / realna_porizovaci_cena if realna_porizovaci_cena > 0 else 0
 
-rocni_ciste_najemne = realne_najemne * 12
-rocni_hrube_najemne = (realne_najemne + provozni_naklady) * 12
-max_cena = rocni_ciste_najemne / pozadovany_vynos if pozadovany_vynos > 0 else 0
-cilovy_najem_mesicne = (kupni_cena + rekonstrukce) * pozadovany_vynos / 12
-mesicni_cashflow = realne_najemne - splatka
-ROI = rocni_ciste_najemne / (kupni_cena + rekonstrukce) if kupni_cena > 0 else 0
+st.markdown("## 📊 Dashboard 1 – Cílové hodnoty")
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.metric("Reálná pořizovací cena", f"{realna_porizovaci_cena:,.0f} Kč")
+with c2:
+    st.metric("Na tento výnos potřebuji, aby po odečtení provozních nákladů zůstalo", f"{pozadovane_mesicni_ciste:,.0f} Kč/měs.")
+with c3:
+    st.metric("ROI (cílové)", f"{ROI_cilove:.2%}")
 
-realna_porizovaci_cena = kupni_cena + rekonstrukce
-realne_hrube_najemne = realne_najemne + provozni_naklady
-ROI_real = rocni_ciste_najemne / realna_porizovaci_cena if realna_porizovaci_cena > 0 else 0
+# ----------------------------
+# 3) Další vstupy pro reálné hodnoty
+# ----------------------------
+st.markdown("---")
+st.subheader("📥 Za kolik jsem schopný nemovitost reálně pronajmout a jaké budou provozní náklady?")
 
-# --- Funkce pro KPI card ---
-def kpi_card(title, value, color="#f0f2f6", icon="📊"):
-    st.markdown(
-        f"""
-        <div style="
-            background-color:{color};
-            padding:20px;
-            border-radius:15px;
-            box-shadow:0 2px 4px rgba(0,0,0,0.1);
-            text-align:center;
-            margin:5px;">
-            <h4 style="margin:0; font-size:16px; color:#333;">{icon} {title}</h4>
-            <p style="margin:0; font-size:22px; font-weight:bold; color:#000;">{value}</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+mesicni_najemne_real = st.number_input("Reálné měsíční hrubé nájemné (Kč)", min_value=0, value=14_000, step=500)
+mesicni_naklady_real = st.number_input("Provozní měsíční náklady (Kč)", min_value=0, value=3_000, step=500)
 
-# --- Dashboard 1: Cílové hodnoty ---
-st.markdown("## 📈 Dashboard 1 – Cílové hodnoty")
+# ----------------------------
+# 4) Dashboard 2 – reálné hodnoty
+# ----------------------------
+rocni_ciste_real = (mesicni_najemne_real - mesicni_naklady_real) * 12
+rocni_hrube_real = mesicni_najemne_real * 12
 
-row1 = st.columns(4)
-with row1[0]: kpi_card("Max. pořizovací cena", f"{max_cena:,.0f} Kč", "#e8f5e9", "🏠")
-with row1[1]: kpi_card("Potřebné nájemné", f"{cilovy_najem_mesicne:,.0f} Kč/měs.", "#fff3e0", "💰")
-with row1[2]: kpi_card("Výše hypotéky", f"{hypo_vyse:,.0f} Kč", "#e3f2fd", "🏦")
-with row1[3]: kpi_card("Měsíční splátka", f"{splatka:,.0f} Kč", "#fce4ec", "📉")
+ROI_real = rocni_ciste_real / realna_porizovaci_cena if realna_porizovaci_cena > 0 else 0
 
-row2 = st.columns(3)
-with row2[0]: kpi_card("Měsíční cashflow", f"{mesicni_cashflow:,.0f} Kč", "#ede7f6", "💸")
-with row2[1]: kpi_card("Čistý roční nájem", f"{rocni_ciste_najemne:,.0f} Kč", "#f9fbe7", "📈")
-with row2[2]: kpi_card("ROI (cílové)", f"{ROI*100:.2f} %", "#fffde7", "🔑")
+# Výpočet rozdílu potřebného nájmu
+rozdil_mesicni = pozadovane_mesicni_ciste - (mesicni_najemne_real - mesicni_naklady_real)
 
-st.divider()
+st.markdown("## 🏡 Jak jsou reálně dosažitelné hodnoty")
+c4, c5, c6, c7 = st.columns(4)
+with c4:
+    st.metric("Čistý roční nájem (reálný)", f"{rocni_ciste_real:,.0f} Kč")
+with c5:
+    st.metric("Hrubé roční nájemné (reálné)", f"{rocni_hrube_real:,.0f} Kč")
+with c6:
+    st.metric("ROI (reálné)", f"{ROI_real:.2%}")
+with c7:
+    if rozdil_mesicni > 0:
+        st.metric("Kolik chybí do cíle", f"+{rozdil_mesicni:,.0f} Kč/měs.")
+    else:
+        st.metric("Přesah oproti cíli", f"{abs(rozdil_mesicni):,.0f} Kč/měs.")
 
-# --- Dashboard 2: Reálné hodnoty ---
-st.markdown("## 🏡 Dashboard 2 – Reálné hodnoty")
+# ----------------------------
+# 5) Dashboard 3 – Cizí kapitál (hypotéka)
+# ----------------------------
+st.markdown("---")
+st.subheader("💰 Co musím splácet a kolik mě bude splácení stát? Jak bude v této situaci vypadat měsíční cashflow?")
 
-row3 = st.columns(3)
-with row3[0]: kpi_card("Reálné čisté nájemné", f"{realne_najemne:,.0f} Kč/měs.", "#f1f8e9", "💵")
-with row3[1]: kpi_card("Reálná pořizovací cena", f"{realna_porizovaci_cena:,.0f} Kč", "#ede7f6", "🏗️")
-with row3[2]: kpi_card("Reálné hrubé nájemné", f"{realne_hrube_najemne:,.0f} Kč/měs.", "#fffde7", "📊")
+hypoteka = st.number_input("Výše hypotéky (Kč)", min_value=0, value=2_000_000, step=100_000)
+urok = st.number_input("Úroková sazba (%)", min_value=0.1, value=5.0, step=0.1) / 100
+doba = st.number_input("Doba splatnosti (roky)", min_value=1, value=20, step=1)
 
-row4 = st.columns(1)
-with row4[0]: kpi_card("ROI (reálné)", f"{ROI_real*100:.2f} %", "#e0f7fa", "🔑")
+# anuitní splátka
+n = doba * 12
+r = urok / 12
+
+if hypoteka > 0 and urok > 0:
+    splatka = hypoteka * r * (1 + r) ** n / ((1 + r) ** n - 1)
+else:
+    splatka = 0
+
+# měsíční čistý výnos (nájem - náklady)
+mesicni_cisty_real = mesicni_najemne_real - mesicni_naklady_real
+
+# měsíční cashflow
+cashflow = mesicni_cisty_real - splatka
+
+c8, c9, c10 = st.columns(3)
+with c8:
+    st.metric("Měsíční splátka hypotéky", f"{splatka:,.0f} Kč")
+with c9:
+    st.metric("Reálný čistý měsíční výnos", f"{mesicni_cisty_real:,.0f} Kč")
+with c10:
+    if cashflow >= 0:
+        st.metric("Měsíční cashflow", f"+{cashflow:,.0f} Kč")
+    else:
+        st.metric("Měsíční cashflow", f"{cashflow:,.0f} Kč")
